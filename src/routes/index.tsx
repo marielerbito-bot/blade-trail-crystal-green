@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, RefreshCw } from "lucide-react";
 import { getXeRates, type Quote } from "@/lib/fx.functions";
+import { getForecasts } from "@/lib/forecast.functions";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -38,6 +39,13 @@ function Home() {
   });
 
   const quotes = query.data?.quotes ?? [];
+  const forecast = useQuery({
+    queryKey: ["wi-forecast"],
+    queryFn: () => getForecasts(),
+    staleTime: 6 * 60 * 60 * 1000,
+  });
+  const [forecastId, setForecastId] = useState("EURUSD");
+  const forecastPair = forecast.data?.pairs.find((p) => p.id === forecastId);
   const [base, setBase] = useState("EURUSD");
   const [amount, setAmount] = useState("1000");
   const [history, setHistory] = useState<Record<string, number[]>>({});
@@ -172,10 +180,68 @@ function Home() {
         )}
       </section>
 
+      <section className="mt-8 rounded-2xl border border-border bg-surface p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium tracking-wide text-primary">WalletInvestor</p>
+            <h2 className="mt-1 font-display text-3xl text-fg">Forecast</h2>
+            <p className="mt-2 max-w-md text-xs leading-relaxed text-muted">
+              Daily model targets, with the published downside and upside. These are projections, not a quote and not advice.
+            </p>
+          </div>
+          <label className="block">
+            <span className="text-xs text-muted">Pair</span>
+            <select
+              value={forecastId}
+              onChange={(e) => setForecastId(e.target.value)}
+              className="mt-1 h-11 rounded-xl border border-border bg-surface-2 px-3 text-sm font-medium text-fg"
+              aria-label="Forecast pair"
+            >
+              {(forecast.data?.pairs ?? Object.keys(NAMES).map((id) => ({ id, label: `${id.slice(0, 3)}/${id.slice(3)}` }))).map(
+                (pair) => (
+                  <option key={pair.id} value={pair.id} className="bg-surface">
+                    {pair.label}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        </div>
+        {forecast.isError && (
+          <p className="mt-4 text-sm text-down">Could not load WalletInvestor forecasts.</p>
+        )}
+        {forecast.isLoading && <p className="mt-4 text-sm text-muted">Loading forecasts…</p>}
+        {forecastPair && (
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted">
+                  <th className="py-2 font-medium">Date</th>
+                  <th className="py-2 text-right font-medium">Forecast</th>
+                  <th className="py-2 text-right font-medium">Downside</th>
+                  <th className="py-2 text-right font-medium">Upside</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecastPair.days.map((row) => (
+                  <tr key={row.date} className="border-t border-border">
+                    <td className="py-2 text-muted">{row.date}</td>
+                    <td className="py-2 text-right font-display text-lg text-fg">{formatRate(row.forecast)}</td>
+                    <td className="py-2 text-right text-down">{formatRate(row.low)}</td>
+                    <td className="py-2 text-right text-primary">{formatRate(row.high)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {forecast.data?.note && (
+              <p className="mt-3 text-xs text-muted">{forecast.data.note}</p>
+            )}
+          </div>
+        )}
+      </section>
+
       <footer className="mt-8 text-xs leading-relaxed text-muted">
-        Source: XE mid-market feed, refreshed every 30 seconds. The previous close is the XE chart rate at
-        00:00 UTC, which is the close of the prior UTC date. It rolls forward at the next midnight UTC. Not a
-        transfer quote.
+        Source: live rates from XE. Daily forecasts are WalletInvestor model targets, not quotes and not advice. The previous close is the XE chart rate at 00:00 UTC.
       </footer>
     </main>
   );
